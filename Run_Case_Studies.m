@@ -1,7 +1,7 @@
 %% Active Contamination Detection - case studies
 % Simulate networks with optimally placed sensors and assess contamination 
 % detectability from all nodes using the Active (ACD) and Passive (PCD) 
-% contamination detection scheme
+% contamination detection schemes
 
 %% Clear all variables and load toolkit
 try 
