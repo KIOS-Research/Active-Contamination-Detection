@@ -80,6 +80,7 @@ cost = 100*PrPenalty + 1000*impact_norm + (PumpCost + ValveCost)/2;
 clc
 disp(['GA fitness function cost: ',num2str(cost)])
 disp(['Scenario: ',netstr])
+disp(['Contamination node: ',num2str(d.getQualityTraceNodeIndex)])
 end
 
 

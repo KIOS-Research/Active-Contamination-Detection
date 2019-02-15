@@ -1,7 +1,7 @@
 %% Active Contamination Detection - case studies
 % Simulate networks with optimally placed sensors and assess contamination 
 % detectability from all nodes using the Active (ACD) and Passive (PCD) 
-% contamination detection schemes
+% contamination detection scheme
 
 %% Clear all variables and load toolkit
 try 
@@ -13,51 +13,52 @@ addpath(genpath(pwd));
 disp('Toolkits Loaded.');  
 
 %% Select simulation scenario
-[inpname,sensor_case,parallel] = enterScenario();
-if strfind(inpname,'Hanoi') 
-    Hanoi=1; M1=0;
-elseif strfind(inpname,'M1')
-    M1=1; Hanoi=0;
-else
-    error('Invalid network selection')
-end
-if Hanoi
-    netstr = ['Hanoi_S',num2str(sensor_case)];
-else
-    netstr = ['M1_S',num2str(sensor_case)];
-end
-
+[inpname,dispname,sensor_case,parallel] = enterScenario();
+netnum = find([contains(inpname,'Hanoi')...
+               contains(inpname,'CY_DMA')]);
+           
 %% Load EPANET Input File and define sensor and contamination nodes
-%%% Hanoi:
-if Hanoi
-d=epanet(inpname);
-switch sensor_case
-    case 1
-    NsID = {'27'}; % define sensor nodes    
-    case 2
-    NsID = {'11','27'}; % define sensor nodes
-    case 3
-    NsID = {'11','27','21'}; % define sensor nodes
-end
-% valvesInd = d.getLinkIndex(d.getLinkNameID); % links that can be closed
-valvesInd = d.getLinkIndex({'34','25','26','28','16','15','13','10','9',...
-'3','19','20','23','21','29','24'}); % links that can be closed
-rlb = 10; rub = 20; % Reservoir head discrete state bounds
-end
-
-%%% M1:
-if M1
-d=epanet(inpname);
-switch sensor_case
-    case 1
-    NsID = {'26'}; % define sensor nodes
-    case 2
-    NsID = {'9','28'}; % define sensor nodes
-    case 3
-    NsID = {'9','28','36'}; % define sensor nodes        
-end
-valvesInd = d.getLinkIndex(d.getLinkNameID); % links that can be closed
-rlb = 0; rub = 10; % Reservoir head discrete state bounds
+switch netnum
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    case 1 %%% Hanoi:
+    netstr = [dispname,'_S',num2str(sensor_case)];
+    d=epanet(inpname);
+    switch sensor_case
+        case 1
+        NsID = {'27'}; % define sensor nodes    
+        case 2
+        NsID = {'11','27'}; % define sensor nodes
+        case 3
+        NsID = {'11','27','21'}; % define sensor nodes
+    end
+    PopulationSize = 500;
+    StallGenLimit=20;
+    Pthr=[20 150]; % define min/max pressure requirement (numerical isssue minus zero)
+    valvesInd = double(d.getLinkIndex(d.getLinkNameID)); % links that can be closed
+    rlb = 6; rub = 20; % Reservoir head discrete state bounds
+    contaminationNodesInd = 1:d.getNodeCount;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
+    case 2 %%% CY_DMA:
+    netstr = [dispname,'_S',num2str(sensor_case)];
+    d=epanet(inpname);
+    switch sensor_case
+        case 1
+        NsID = {'41'}; % define sensor nodes
+        case 2
+        NsID = {'41','90'}; % define sensor nodes
+        case 3
+        NsID = {'41','48','90'}; % define sensor nodes        
+    end
+    PopulationSize = 500;
+    StallGenLimit=20;
+    Pthr=[20 90]; % define min/max pressure requirement (numerical isssue minus zero)
+%     valvesInd =find(d.getLinkLength>50); % links that can be closed
+    valvesInd = double(d.getLinkIndex(d.getLinkNameID)); % links that can be closed
+    valvesInd([1 10 12 14 17 23 31 44 65 67 69 86 90 101 106 116])=[]; %links that can't be closed 
+    rlb = 3; rub = 8; % Reservoir head discrete state bounds
+    contaminationNodesInd = 1:d.getNodeCount;
+    contaminationNodesInd([2 4 6 12 14 22 24 29 49 54 58 70 70 72 81 83])=[]; % nodes that won't be simulated
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 end
 
 %% Initialization parameters:
@@ -68,7 +69,6 @@ sim_time = d.getTimeSimulationDuration/3600; %hours
 hyd_step = double(d.getTimeHydraulicStep)/3600; %hours
 simSteps = sim_time/hyd_step; %steps
 kdmax = sim_time / hyd_step ;   % define maximum time constraint in hours
-Pthr=[20 150];                % define min/max pressure requirement (numerical isssue minus zero)
 Tthr = 7;                      % define minimum detection threshold
 uinit = d.getLinkInitialStatus; % get link initial status
 lb=ones(1,nl); % all links initially open
@@ -79,11 +79,11 @@ lb(valvesInd)=0; % links that can be closed
 options = gaoptimset(@ga);
 % options.MutationFcn = @mutationgaussian; % select mutation function
 % options.PlotFcns = @gaplotbestf; % plot the fitness function
-options.PopulationSize = 300; % population in each generation
+options.PopulationSize = PopulationSize; % population in each generation
 % options.Generations=1; % set maximum generations
-options.StallGenLimit=20; % generation stall limit
+options.StallGenLimit=StallGenLimit; % generation stall limit
 options.UseParallel=parallel; % parallel simulation
-options.InitialPopulation=[uinit rlb];
+options.InitialPopulation=[uinit rub];
 %%%%%% GA Problem struct:
 problem = struct(...
 'fitnessfcn',@(u)GACostFunction(u,d,Ns,kdmax,Pthr,Tthr,rub,uinit,options.UseParallel,netstr),... %Fitness function (@ParticleTracking OR @GACostFunction)
@@ -100,7 +100,8 @@ problem = struct(...
 'rngstate',[]); %state of the random number generator
 
 %% ACD sensor detectability simulations
-for Na = 1:d.getNodeCount % for all nodes being contaminated
+ind = 1;
+for Na = contaminationNodesInd % for all nodes being contaminated
 %% Set nodes suspect for contamination and sensor nodes
 d.setQualityType('trace',d.NodeNameID{Na})
 d.setNodeInitialQuality(zeros(1,nn))
@@ -118,7 +119,8 @@ tic
 elapsed_time = toc;
 [ cost, kd, valvesClosed, valvesClosedInd, pumpHead, PrPenalty, impact ] = ...
     extra_sim_results(x,d,Ns,kdmax,Pthr,Tthr,rub,uinit);
-ResultsGA_node{Na}=struct(...
+ResultsGA_node{ind}=struct(...
+    'node_ind',Na,...
     'cost',cost,...
     'input',x,...
     'kd',kd,... 
@@ -128,19 +130,22 @@ ResultsGA_node{Na}=struct(...
     'PrPenalty',PrPenalty,... 
     'impact',impact,...
     'elapsed_time',elapsed_time);
+ind=ind+1;
 end
 
 %% PCD sensor detectability simulations:
 d.unload
 d=epanet(inpname);
-for Na = 1:d.getNodeCount
+ind = 1;
+for Na = contaminationNodesInd
 d.setQualityType('trace',d.NodeNameID{Na})
 d.setNodeInitialQuality(zeros(1,nn))
 pump = d.getNodeElevations(d.getNodeReservoirIndex)/10;
 x=[uinit pump];
 [ cost, kd, valvesClosed, valvesClosedInd, pumpHead, PrPenalty, impact ] = ...
     extra_sim_results(x,d,Ns,kdmax,Pthr,Tthr,rub,uinit);
-ResultsDEF_node{Na}=struct(...
+ResultsDEF_node{ind}=struct(...
+    'node_ind',Na,...
     'cost',cost,...
     'input',x,...
     'kd',kd,... 
@@ -149,11 +154,11 @@ ResultsDEF_node{Na}=struct(...
     'pumpHead',pumpHead,... 
     'PrPenalty',PrPenalty,... 
     'impact',impact); 
+ind=ind+1;
 end
 
 %% Save results in "simulations" folder
 clearvars ans cost elapsed_time fval exitflag impact kd Na PrPenalty pumpHead valvesClosed valvesClosedInd x
-if Hanoi; netstr = ['Hanoi_S',num2str(sensor_case)]; else netstr = ['M1_S',num2str(sensor_case)]; end
 FileName=['simulations\contamSim_',netstr,datestr(now, '_yyyy-mm-dd_HH-MM-SS')];
 save(FileName)
 d.unload

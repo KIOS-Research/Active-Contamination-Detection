@@ -1,4 +1,4 @@
-function [inpname,sensor_case,parallel] = enterScenario()
+function [inpname,dispname,sensor_case,parallel] = enterScenario()
 %% choose a network to load from networks folder:
 clc
 dirName = [pwd,'\networks\*.inp'];
@@ -9,10 +9,11 @@ for i=1:length(Allinpnames)
 end
 x = input(sprintf('\nEnter Network Number: '));
 if isempty(x)
-    error('Invalid choise of network.')
+    error('Invalid choice of network.')
 end
 inpname=['\networks\',Allinpnames(x).name];
-disp(['Loading network: ',inpname])
+dispname=Allinpnames(x).name(1:find(Allinpnames(x).name=='.')-1);
+disp(['Loading network: ',dispname])
 
 %% Choose sensor case:
 disp(sprintf('\nChoose optimally-placed sensor number (1, 2 or 3):'))
